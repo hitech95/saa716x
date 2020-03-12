@@ -1023,14 +1023,14 @@ if [ "x$stock_opt" = "xyes" ]; then
       if [ "x$debug_opt" = "xyes" ]; then
         fakeroot make -f debian/rules.gen binary-arch_amd64_none_amd64 2>&1 | tee ../buildlog_amd64_none_amd64
       else
-        fakeroot make -j2 -f debian/rules.gen binary-arch_amd64_none_amd64 2>&1 | tee ../buildlog_amd64_none_amd64
+        fakeroot make -j$(nproc --all --ignore=1) -f debian/rules.gen binary-arch_amd64_none_amd64 2>&1 | tee ../buildlog_amd64_none_amd64
       fi
     else
       fakeroot make -f debian/rules.gen binary-indep_none_real 2>&1 | tee ../buildlog_binary-indep_none_real
       if [ "x$debug_opt" = "xyes" ]; then
         fakeroot make -f debian/rules.gen binary-arch_i386_none_686-pae 2>&1 | tee ../buildlog_i386_none_686-pae
       else
-        fakeroot make -j2 -f debian/rules.gen binary-arch_i386_none_686-pae 2>&1 | tee ../buildlog_i386_none_686-pae
+        fakeroot make -j$(nproc --all --ignore=1) -f debian/rules.gen binary-arch_i386_none_686-pae 2>&1 | tee ../buildlog_i386_none_686-pae
       fi
     fi
     file=($DIR/linux-image-*.deb)
