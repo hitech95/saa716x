@@ -204,10 +204,10 @@ static int saa716x_pctv7010ix_frontend_attach(struct saa716x_adapter *adapter,
 	msleep(10);
 	*/
 
-	switch(count){
+	switch(count) {
 		case 0:
 		case 1:
-			i2c = &saa716x->i2c[0];
+			i2c = &saa716x->i2c[1];
 
 			/* PHILIPS TDA10046A */
 			adapter->fe = dvb_attach(tda10046_attach,
@@ -232,7 +232,7 @@ static int saa716x_pctv7010ix_frontend_attach(struct saa716x_adapter *adapter,
 			break;
 		case 2:
 		case 3:
-			i2c = &saa716x->i2c[1];
+			i2c = &saa716x->i2c[0];
 
 			/* Zarlink ZL10313 */
 			adapter->fe = dvb_attach(mt312_attach,
@@ -249,7 +249,7 @@ static int saa716x_pctv7010ix_frontend_attach(struct saa716x_adapter *adapter,
 					dvb_frontend_detach(adapter->fe);
 					adapter->fe = NULL;
 
-					pci_err(saa716x->pdev, "No zl10039 found!");
+					pci_err(saa716x->pdev, "No ZL10039 found!");
 					pci_err(saa716x->pdev, "Frontend attach failed");
 					return -ENODEV;
 			}
@@ -267,32 +267,32 @@ static int saa716x_pctv7010ix_frontend_attach(struct saa716x_adapter *adapter,
 static const struct saa716x_config saa716x_pctv7010ix_config = {
 	.model_name		= SAA716x_MODEL_PINNACLE_PCTV7010IX,
 	.dev_type		= SAA716x_DEV_PINNACLE_PCTV7010IX,
-	.adapters		= 4,
+	.adapters		= 1,
 	.frontend_attach	= saa716x_pctv7010ix_frontend_attach,
 	.irq_handler		= saa716x_budget_pci_irq,
 	.i2c_rate		= SAA716x_I2C_RATE_100,
-	.adap_config		= {
-		{
-			/* adapter 0 */
-			.ts_vp   = 2,
-			.ts_fgpi = 3
-		},
-		{
-			/* adapter 1 */
-			.ts_vp   = 3,
-			.ts_fgpi = 2
-		},
-		{
-			/* adapter 2 */
-			.ts_vp   = 6,
-			.ts_fgpi = 1
-		},
-		{
-			/* adapter 3 */
-			.ts_vp   = 5,
-			.ts_fgpi = 0
-		},
-	},
+	// .adap_config		= {
+	// 	{
+	// 		/* adapter 0 */
+	// 		.ts_vp   = 2,
+	// 		.ts_fgpi = 3
+	// 	},
+	// 	{
+	// 		/* adapter 1 */
+	// 		.ts_vp   = 3,
+	// 		.ts_fgpi = 2
+	// 	},
+	// 	{
+	// 		/* adapter 2 */
+	// 		.ts_vp   = 6,
+	// 		.ts_fgpi = 1
+	// 	},
+	// 	{
+	// 		/* adapter 3 */
+	// 		.ts_vp   = 5,
+	// 		.ts_fgpi = 0
+	// 	},
+	// },
 };
 
 
