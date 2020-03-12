@@ -177,7 +177,7 @@ static int saa716x_pctv7010ix_frontend_attach(struct saa716x_adapter *adapter,
 					  int count)
 {
 	struct saa716x_dev *saa716x = adapter->saa716x;
-	struct saa716x_i2c *i2c = &saa716x->i2c[count];
+	struct saa716x_i2c *i2c;
 
 	pci_dbg(saa716x->pdev, "Adapter (%d) SAA716x frontend Init", count);
 	pci_dbg(saa716x->pdev, "Adapter (%d) Device ID=%02x", count,
@@ -207,6 +207,8 @@ static int saa716x_pctv7010ix_frontend_attach(struct saa716x_adapter *adapter,
 	switch(count){
 		case 0:
 		case 1:
+			i2c = &saa716x->i2c[0];
+
 			/* PHILIPS TDA10046A */
 			adapter->fe = dvb_attach(tda10046_attach,
 				&tda1004x_pctv7010ix_config, &i2c->i2c_adapter);
@@ -216,6 +218,7 @@ static int saa716x_pctv7010ix_frontend_attach(struct saa716x_adapter *adapter,
 				return -ENODEV;
 			}
 
+			/* Attach TDA8275A tuner */
 			if (dvb_attach(tda827x_attach, adapter->fe, 0x60,
 			    &i2c->i2c_adapter, &tda827x_pctv7010ix_config) == NULL) {
 					dvb_frontend_detach(adapter->fe);
@@ -229,6 +232,8 @@ static int saa716x_pctv7010ix_frontend_attach(struct saa716x_adapter *adapter,
 			break;
 		case 2:
 		case 3:
+			i2c = &saa716x->i2c[1];
+
 			/* Zarlink ZL10313 */
 			adapter->fe = dvb_attach(mt312_attach,
 				&mt312_pctv7010ix_config, &i2c->i2c_adapter);
@@ -238,6 +243,7 @@ static int saa716x_pctv7010ix_frontend_attach(struct saa716x_adapter *adapter,
 				return -ENODEV;
 			}
 			
+			/* Attach ZL10039 tuner */
 			if (dvb_attach(zl10039_attach, adapter->fe, 0x60,
 				&i2c->i2c_adapter) == NULL) {
 					dvb_frontend_detach(adapter->fe);
