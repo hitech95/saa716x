@@ -150,17 +150,26 @@ static int tda1004x_pctv7010ix_request_firmware(struct dvb_frontend *fe,
 }
 
 static const struct tda1004x_config tda1004x_pctv7010ix_config = {
-	.demod_address		= 0x8,
+	.demod_address	= 0x8,
 	.invert			= 0,
-	.invert_oclk		= 0,
+	.invert_oclk	= 0,
 	.xtal_freq		= TDA10046_XTAL_4M,
 	.agc_config		= TDA10046_AGC_DEFAULT,
 	.if_freq		= TDA10046_FREQ_3617,
 	.request_firmware	= tda1004x_pctv7010ix_request_firmware,
 };
 
+static const struct tda827x_config tda827x_pctv7010ix_config = {
+	.init		= NULL,
+	.sleep		= NULL,
+	.config		= 0,
+	.switch_addr	= 0,
+	.agcf		= NULL,
+};
+
 static const struct mt312_config mt312_pctv7010ix_config = {
 	.demod_address = 0x0e,
+	/* Unknown Settings ??? */
 	.voltage_inverted = 1,
 };
 
@@ -175,12 +184,25 @@ static int saa716x_pctv7010ix_frontend_attach(struct saa716x_adapter *adapter,
 		saa716x->pdev->subsystem_device);
 	pci_dbg(saa716x->pdev, "Adapter (%d) Power ON", count);
 
-	/* Unknown GPIOs ??? */
+	/* Unknown GPIOs up to 28 ??? */
+	/* Reset the demodulator */
+
+	/*
 	saa716x_gpio_set_output(saa716x, 11);
 	saa716x_gpio_set_output(saa716x, 10);
 	saa716x_gpio_write(saa716x, 11, 1);
 	saa716x_gpio_write(saa716x, 10, 1);
 	msleep(100);
+	*/
+
+	/*
+	saa716x_gpio_write(saa716x, 14, 1);
+	msleep(10);
+	saa716x_gpio_write(saa716x, 14, 0);
+	msleep(10);
+	saa716x_gpio_write(saa716x, 14, 1);
+	msleep(10);
+	*/
 
 	switch(count){
 		case 0:
@@ -188,9 +210,20 @@ static int saa716x_pctv7010ix_frontend_attach(struct saa716x_adapter *adapter,
 			/* PHILIPS TDA10046A */
 			adapter->fe = dvb_attach(tda10046_attach,
 				&tda1004x_pctv7010ix_config, &i2c->i2c_adapter);
+
 			if (adapter->fe == NULL) {
 				pci_err(saa716x->pdev, "Frontend attach failed");
 				return -ENODEV;
+			}
+
+			if (dvb_attach(tda827x_attach, adapter->fe, 0x60,
+			    &i2c->i2c_adapter, &tda827x_pctv7010ix_config) == NULL) {
+					dvb_frontend_detach(adapter->fe);
+					adapter->fe = NULL;
+
+					pci_err(saa716x->pdev, "No TDA8275A found!");
+					pci_err(saa716x->pdev, "Frontend attach failed");
+					return -ENODEV;
 			}
 
 			break;
@@ -232,6 +265,28 @@ static const struct saa716x_config saa716x_pctv7010ix_config = {
 	.frontend_attach	= saa716x_pctv7010ix_frontend_attach,
 	.irq_handler		= saa716x_budget_pci_irq,
 	.i2c_rate		= SAA716x_I2C_RATE_100,
+	.adap_config		= {
+		{
+			/* adapter 0 */
+			.ts_vp   = 2,
+			.ts_fgpi = 3
+		},
+		{
+			/* adapter 1 */
+			.ts_vp   = 3,
+			.ts_fgpi = 2
+		},
+		{
+			/* adapter 2 */
+			.ts_vp   = 6,
+			.ts_fgpi = 1
+		},
+		{
+			/* adapter 3 */
+			.ts_vp   = 5,
+			.ts_fgpi = 0
+		},
+	},
 };
 
 
