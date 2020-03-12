@@ -14,10 +14,15 @@
 #include "saa716x_gpio.h"
 #include "saa716x_priv.h"
 
+#include "mt312.h"
+#include "zl10039.h"
+
 #include "stv6110x.h"
 #include "stv090x.h"
 #include "si2168.h"
 #include "si2157.h"
+#include "tda1004x.h"
+#include "tda827x.h"
 
 #define DRIVER_NAME	"SAA716x Budget"
 
@@ -126,6 +131,108 @@ static irqreturn_t saa716x_budget_pci_irq(int irq, void *dev_id)
 
 	return IRQ_HANDLED;
 }
+
+/*
+ * PINNACLE PCTV 7010iX
+ * DVB-S Frontend: 2x ZL10313 + ZL10037 - not supported yet
+ * DVB-T Frontend: 2x TDA10046A + TDA8275
+ */
+#define SAA716x_MODEL_PINNACLE_PCTV7010IX	"PINNACLE PCTV 7010iX"
+#define SAA716x_DEV_PINNACLE_PCTV7010IX	"2xDVB-S + 2xDVB-T"
+
+static int tda1004x_pctv7010ix_request_firmware(struct dvb_frontend *fe,
+					      const struct firmware **fw,
+					      char *name)
+{
+	struct saa716x_adapter *adapter = fe->dvb->priv;
+
+	return request_firmware(fw, name, &adapter->saa716x->pdev->dev);
+}
+
+static const struct tda1004x_config tda1004x_pctv7010ix_config = {
+	.demod_address		= 0x8,
+	.invert			= 0,
+	.invert_oclk		= 0,
+	.xtal_freq		= TDA10046_XTAL_4M,
+	.agc_config		= TDA10046_AGC_DEFAULT,
+	.if_freq		= TDA10046_FREQ_3617,
+	.request_firmware	= tda1004x_pctv7010ix_request_firmware,
+};
+
+static const struct mt312_config mt312_pctv7010ix_config = {
+	.demod_address = 0x0e,
+	.voltage_inverted = 1,
+};
+
+static int saa716x_pctv7010ix_frontend_attach(struct saa716x_adapter *adapter,
+					  int count)
+{
+	struct saa716x_dev *saa716x = adapter->saa716x;
+	struct saa716x_i2c *i2c = &saa716x->i2c[count];
+
+	pci_dbg(saa716x->pdev, "Adapter (%d) SAA716x frontend Init", count);
+	pci_dbg(saa716x->pdev, "Adapter (%d) Device ID=%02x", count,
+		saa716x->pdev->subsystem_device);
+	pci_dbg(saa716x->pdev, "Adapter (%d) Power ON", count);
+
+	/* Unknown GPIOs ??? */
+	saa716x_gpio_set_output(saa716x, 11);
+	saa716x_gpio_set_output(saa716x, 10);
+	saa716x_gpio_write(saa716x, 11, 1);
+	saa716x_gpio_write(saa716x, 10, 1);
+	msleep(100);
+
+	switch(count){
+		case 0:
+		case 1:
+			/* PHILIPS TDA10046A */
+			adapter->fe = dvb_attach(tda10046_attach,
+				&tda1004x_pctv7010ix_config, &i2c->i2c_adapter);
+			if (adapter->fe == NULL) {
+				pci_err(saa716x->pdev, "Frontend attach failed");
+				return -ENODEV;
+			}
+
+			break;
+		case 2:
+		case 3:
+			/* Zarlink ZL10313 */
+			adapter->fe = dvb_attach(mt312_attach,
+				&mt312_pctv7010ix_config, &i2c->i2c_adapter);
+
+			if (adapter->fe == NULL) {
+				pci_err(saa716x->pdev, "Frontend attach failed");
+				return -ENODEV;
+			}
+			
+			if (dvb_attach(zl10039_attach, adapter->fe, 0x60,
+				&i2c->i2c_adapter) == NULL) {
+					dvb_frontend_detach(adapter->fe);
+					adapter->fe = NULL;
+
+					pci_err(saa716x->pdev, "No zl10039 found!");
+					pci_err(saa716x->pdev, "Frontend attach failed");
+					return -ENODEV;
+			}
+
+			break;
+		default:
+			pci_err(saa716x->pdev, "Frontend attach failed");
+			return -ENODEV;
+	}
+
+	pci_dbg(saa716x->pdev, "Done!");
+	return 0;
+}
+
+static const struct saa716x_config saa716x_pctv7010ix_config = {
+	.model_name		= SAA716x_MODEL_PINNACLE_PCTV7010IX,
+	.dev_type		= SAA716x_DEV_PINNACLE_PCTV7010IX,
+	.adapters		= 4,
+	.frontend_attach	= saa716x_pctv7010ix_frontend_attach,
+	.irq_handler		= saa716x_budget_pci_irq,
+	.i2c_rate		= SAA716x_I2C_RATE_100,
+};
 
 
 #define SAA716x_MODEL_SKYSTAR2_EXPRESS_HD	"SkyStar 2 eXpress HD"
@@ -471,6 +578,7 @@ static const struct saa716x_config saa716x_tbs6285_config = {
 
 
 static const struct pci_device_id saa716x_budget_pci_table[] = {
+	MAKE_ENTRY(PINNACLE, PCTV7010IX,           SAA7162, &saa716x_pctv7010ix_config),
 	MAKE_ENTRY(TECHNISAT, SKYSTAR2_EXPRESS_HD, SAA7160, &skystar2_express_hd_config),
 	MAKE_ENTRY(TURBOSIGHT_TBS6281, TBS6281,    SAA7160, &saa716x_tbs6281_config),
 	MAKE_ENTRY(TURBOSIGHT_TBS6285, TBS6285,    SAA7160, &saa716x_tbs6285_config),

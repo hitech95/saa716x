@@ -3,6 +3,9 @@
 #ifndef __SAA716x_BUDGET_H
 #define __SAA716x_BUDGET_H
 
+#define PINNACLE	0x11bd
+#define PCTV7010IX			0x0101
+
 #define TECHNISAT		0x1AE4
 #define SKYSTAR2_EXPRESS_HD	0x0700
 
