@@ -150,7 +150,7 @@ static int tda1004x_pctv7010ix_request_firmware(struct dvb_frontend *fe,
 }
 
 static const struct tda1004x_config tda1004x_pctv7010ix_config = {
-	.demod_address	= 0x8,
+	.demod_address	= 0x88,
 	.invert			= 0,
 	.invert_oclk	= 0,
 	.xtal_freq		= TDA10046_XTAL_4M,
@@ -187,11 +187,14 @@ static int saa716x_pctv7010ix_frontend_attach(struct saa716x_adapter *adapter,
 		saa716x->pdev->subsystem_device);
 	pci_dbg(saa716x->pdev, "Adapter (%d) Power ON", count);
 
+	/*
 	saa716x_gpio_set_output(saa716x, 11);
 	saa716x_gpio_set_output(saa716x, 10);
 	saa716x_gpio_write(saa716x, 11, 1);
 	saa716x_gpio_write(saa716x, 10, 1);
 	msleep(100);
+	*/
+
 	
 	found = 0;
 	for(i = 0; i < 2 && !found; i++) {
