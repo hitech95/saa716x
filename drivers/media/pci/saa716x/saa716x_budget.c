@@ -295,7 +295,7 @@ static int saa716x_pctv7010ix_frontend_attach(struct saa716x_adapter *adapter,
 			}
 
 			/* Attach TDA8275A tuner */
-			if (dvb_attach(tda827x_attach, adapter->fe, 0x60,
+			if (dvb_attach(tda827x_attach, adapter->fe, 0x61,
 				&i2c->i2c_adapter, &tda827x_pctv7010ix_config) == NULL) {
 					dvb_frontend_detach(adapter->fe);
 					adapter->fe = NULL;
