@@ -132,6 +132,35 @@ static irqreturn_t saa716x_budget_pci_irq(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
+static int configure_tda827x_fe(struct saa716x_adapter *adapter,
+				struct tda1004x_config *demod_conf,
+				struct tda827x_config *tuner_conf)
+{
+	struct saa716x_dev *saa716x = adapter->saa716x;
+	struct saa716x_i2c *i2c = &saa716x->i2c[SAA716x_I2C_BUS_B];
+
+	adapter->fe = dvb_attach(tda10046_attach,
+		&tda1004x_08_pctv7010ix_config, &i2c->i2c_adapter);
+
+	if (adapter->fe) {
+		/* Attach TDA8275A tuner */
+		if (dvb_attach(tda827x_attach, adapter->fe, demod_conf->tuner_address,
+			&i2c->i2c_adapter, tuner_conf) == NULL) {
+				dvb_frontend_detach(adapter->fe);
+				adapter->fe = NULL;
+
+				pci_err(saa716x->pdev, "No TDA8275A found at addr %02x!",
+					demod_conf->tuner_address);
+				pci_err(saa716x->pdev, "Frontend attach failed");
+				return -EINVAL;
+		}
+
+		return 0;
+	}
+
+	return -EINVAL;
+}
+
 /*
  * PINNACLE PCTV 7010iX
  * DVB-S Frontend: 2x ZL10313 + ZL10037 - not supported yet
@@ -141,11 +170,9 @@ static irqreturn_t saa716x_budget_pci_irq(int irq, void *dev_id)
 #define SAA716x_DEV_PINNACLE_PCTV7010IX	"2xDVB-S + 2xDVB-T"
 
 static int tda1004x_pctv7010ix_request_firmware(struct dvb_frontend *fe,
-					      const struct firmware **fw,
-					      char *name)
+					      const struct firmware **fw, char *name)
 {
 	struct saa716x_adapter *adapter = fe->dvb->priv;
-
 	return request_firmware(fw, name, &adapter->saa716x->pdev->dev);
 }
 
@@ -157,6 +184,7 @@ static const struct tda1004x_config tda1004x_08_pctv7010ix_config = {
 	.agc_config		= TDA10046_AGC_DEFAULT,
 	.if_freq		= TDA10046_FREQ_3617,
 	.request_firmware	= tda1004x_pctv7010ix_request_firmware,
+	.tuner_address	= 0x60,
 };
 
 static const struct tda1004x_config tda1004x_88_pctv7010ix_config = {
@@ -167,6 +195,7 @@ static const struct tda1004x_config tda1004x_88_pctv7010ix_config = {
 	.agc_config		= TDA10046_AGC_DEFAULT,
 	.if_freq		= TDA10046_FREQ_3617,
 	.request_firmware	= tda1004x_pctv7010ix_request_firmware,
+	.tuner_address	= 0x61,
 };
 
 static const struct tda827x_config tda827x_pctv7010ix_config = {
@@ -243,33 +272,22 @@ static int saa716x_pctv7010ix_frontend_attach(struct saa716x_adapter *adapter,
 	// }	
 
 	switch(count) {
-		case 0:
-			i2c = &saa716x->i2c[0];
+		case 0:			
 			
 			/* Reset the demodulator */
 			/* This is shared with frontend 1 */
 			saa716x_gpio_set_output(saa716x, 15);
 			saa716x_gpio_write(saa716x, 15, 1);
-			msleep(100);		
+			msleep(100);	
 
 			/* PHILIPS TDA10046A */
-			adapter->fe = dvb_attach(tda10046_attach,
-				&tda1004x_08_pctv7010ix_config, &i2c->i2c_adapter);
 
-			if (adapter->fe == NULL) {
+			if(configure_tda827x_fe(adapter,
+				&tda1004x_08_pctv7010ix_config,
+				&tda827x_pctv7010ix_config) < 0 ){
+
 				pci_err(saa716x->pdev, "Frontend attach failed");
 				return -ENODEV;
-			}
-
-			/* Attach TDA8275A tuner */
-			if (dvb_attach(tda827x_attach, adapter->fe, 0x60,
-				&i2c->i2c_adapter, &tda827x_pctv7010ix_config) == NULL) {
-					dvb_frontend_detach(adapter->fe);
-					adapter->fe = NULL;
-
-					pci_err(saa716x->pdev, "No TDA8275A found!");
-					pci_err(saa716x->pdev, "Frontend attach failed");
-					return -ENODEV;
 			}
 
 			break;
@@ -297,7 +315,7 @@ static int saa716x_pctv7010ix_frontend_attach(struct saa716x_adapter *adapter,
 			}
 
 			break;
-		case 2: 	
+		case 2:
 			i2c = &saa716x->i2c[0];
 
 			/* Reset the demodulator */
@@ -340,7 +358,7 @@ static int saa716x_pctv7010ix_frontend_attach(struct saa716x_adapter *adapter,
 static const struct saa716x_config saa716x_pctv7010ix_config = {
 	.model_name		= SAA716x_MODEL_PINNACLE_PCTV7010IX,
 	.dev_type		= SAA716x_DEV_PINNACLE_PCTV7010IX,
-	.adapters		= 3,
+	.adapters		= 1,
 	.frontend_attach	= saa716x_pctv7010ix_frontend_attach,
 	.irq_handler		= saa716x_budget_pci_irq,
 	.i2c_rate		= SAA716x_I2C_RATE_100,
