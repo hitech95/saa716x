@@ -189,162 +189,143 @@ static int saa716x_pctv7010ix_frontend_attach(struct saa716x_adapter *adapter,
 	struct saa716x_dev *saa716x = adapter->saa716x;
 	struct saa716x_i2c *i2c;
 
-	//int i, j, k;
-	//int found;
+	int i, j, k;
+	int found;
 
 	pci_dbg(saa716x->pdev, "Adapter (%d) SAA716x frontend Init", count);
 	pci_dbg(saa716x->pdev, "Adapter (%d) Device ID=%02x", count,
 		saa716x->pdev->subsystem_device);
 	pci_dbg(saa716x->pdev, "Adapter (%d) Power ON", count);
-
-	/*
-	saa716x_gpio_set_output(saa716x, 11);
-	saa716x_gpio_set_output(saa716x, 10);
-	saa716x_gpio_write(saa716x, 11, 1);
-	saa716x_gpio_write(saa716x, 10, 1);
-	msleep(100);
-	*/
 	
-	// found = 0;
-	// for(i = 0; i < 2 && !found; i++) {
-	// 	i2c = &saa716x->i2c[i];
+	found = 0;
+	for(i = 0; i < 2 && !found; i++) {
+		i2c = &saa716x->i2c[i];
 
-	// 	for(j = 0; j < 28 && !found; j++) {
-	// 		saa716x_gpio_set_output(saa716x, j);
+		for(j = 0; j < 28 && !found; j++) {
+			saa716x_gpio_set_output(saa716x, j);
 
-	// 		for(k = 0; k < 2 && !found; k++) {			
+			for(k = 0; k < 2 && !found; k++) {			
 				
-	// 			saa716x_gpio_write(saa716x, j, k);
-	// 			msleep(100);
+				saa716x_gpio_write(saa716x, j, k);
+				msleep(100);
+
+				/* Zarlink ZL10313 */
+				adapter->fe = dvb_attach(mt312_attach,
+					&mt312_pctv7010ix_config, &i2c->i2c_adapter);
 				
-	// 			/* PHILIPS TDA10046A */
-	// 			adapter->fe = dvb_attach(tda10046_attach,
-	// 				&tda1004x_pctv7010ix_config, &i2c->i2c_adapter);
+				if (adapter->fe) {
+					pci_warn(saa716x->pdev, "Frontend attach success at address (%d) on bus (%d), with reset gpio (%d) having state (%d)",
+						0x0e, i, j, k);
+					found = 1;
 
-	// 			if (adapter->fe) {
-	// 				pci_warn(saa716x->pdev, "Frontend attach success at address (%d) on bus (%d), with reset gpio (%d) having state (%d)",
-	// 					0x8, i, j, k);
-	// 				found = 1;
+					/* Attach ZL10039 tuner */
+					if (dvb_attach(zl10039_attach, adapter->fe, 0x60,
+						&i2c->i2c_adapter)) {
+							pci_err(saa716x->pdev, "ZL10039 found! on 0x60");		
+					} else {
+						dvb_frontend_detach(adapter->fe);
+						adapter->fe = NULL;
 
-	// 				/* Attach TDA8275A tuner */
-	// 				if (dvb_attach(tda827x_attach, adapter->fe, 0x60,
-	// 					&i2c->i2c_adapter, &tda827x_pctv7010ix_config)) {
-	// 						pci_err(saa716x->pdev, "TDA8275A found! on 0x60");			
-	// 				} else {
-	// 					dvb_frontend_detach(adapter->fe);
-	// 					adapter->fe = NULL;
+						pci_err(saa716x->pdev, "No ZL10039 found!");
+						return -ENODEV;						
+					}
+				}
+			}
 
-	// 					pci_err(saa716x->pdev, "No TDA8275A found!");
-	// 					return -ENODEV;
-	// 					//found = 0;
-	// 				}
-	// 			}
+			saa716x_gpio_set_input(saa716x, j);
+			msleep(100);
+		}
+	}
+
+	if(!found){
+		pci_err(saa716x->pdev, "Frontend attach failed");
+		return -ENODEV;
+	}	
+
+	// switch(count) {
+	// 	case 0:
+	// 		i2c = &saa716x->i2c[0];
+			
+	// 		/* Reset the demodulator */
+	// 		/* This is shared with frontend 1 */
+	// 		saa716x_gpio_set_output(saa716x, 15);
+	// 		saa716x_gpio_write(saa716x, 15, 1);
+	// 		msleep(100);		
+
+	// 		/* PHILIPS TDA10046A */
+	// 		adapter->fe = dvb_attach(tda10046_attach,
+	// 			&tda1004x_08_pctv7010ix_config, &i2c->i2c_adapter);
+
+	// 		if (adapter->fe == NULL) {
+	// 			pci_err(saa716x->pdev, "Frontend attach failed");
+	// 			return -ENODEV;
 	// 		}
 
-	// 		saa716x_gpio_set_input(saa716x, j);
-	// 		msleep(100);
-	// 	}
+	// 		/* Attach TDA8275A tuner */
+	// 		if (dvb_attach(tda827x_attach, adapter->fe, 0x60,
+	// 			&i2c->i2c_adapter, &tda827x_pctv7010ix_config) == NULL) {
+	// 				dvb_frontend_detach(adapter->fe);
+	// 				adapter->fe = NULL;
+
+	// 				pci_err(saa716x->pdev, "No TDA8275A found!");
+	// 				pci_err(saa716x->pdev, "Frontend attach failed");
+	// 				return -ENODEV;
+	// 		}
+
+	// 		break;
+	// 	case 1:
+	// 		i2c = &saa716x->i2c[0];			
+
+	// 		/* PHILIPS TDA10046A */
+	// 		adapter->fe = dvb_attach(tda10046_attach,
+	// 			&tda1004x_88_pctv7010ix_config, &i2c->i2c_adapter);
+
+	// 		if (adapter->fe == NULL) {
+	// 			pci_err(saa716x->pdev, "Frontend attach failed");
+	// 			return -ENODEV;
+	// 		}
+
+	// 		/* Attach TDA8275A tuner */
+	// 		if (dvb_attach(tda827x_attach, adapter->fe, 0x61,
+	// 			&i2c->i2c_adapter, &tda827x_pctv7010ix_config) == NULL) {
+	// 				dvb_frontend_detach(adapter->fe);
+	// 				adapter->fe = NULL;
+
+	// 				pci_err(saa716x->pdev, "No TDA8275A found!");
+	// 				pci_err(saa716x->pdev, "Frontend attach failed");
+	// 				return -ENODEV;
+	// 		}
+
+	// 		break;
+	// 	case 2:
+	// 	case 3:
+	// 		i2c = &saa716x->i2c[1];
+
+	// 		/* Zarlink ZL10313 */
+	// 		adapter->fe = dvb_attach(mt312_attach,
+	// 			&mt312_pctv7010ix_config, &i2c->i2c_adapter);
+
+	// 		if (adapter->fe == NULL) {
+	// 			pci_err(saa716x->pdev, "Frontend attach failed");
+	// 			return -ENODEV;
+	// 		}
+			
+	// 		/* Attach ZL10039 tuner */
+	// 		if (dvb_attach(zl10039_attach, adapter->fe, 0x60,
+	// 			&i2c->i2c_adapter) == NULL) {
+	// 				dvb_frontend_detach(adapter->fe);
+	// 				adapter->fe = NULL;
+
+	// 				pci_err(saa716x->pdev, "No ZL10039 found!");
+	// 				pci_err(saa716x->pdev, "Frontend attach failed");
+	// 				return -ENODEV;
+	// 		}
+
+	// 		break;
+	// 	default:
+	// 		pci_err(saa716x->pdev, "Frontend attach failed");
+	// 		return -ENODEV;
 	// }
-
-	// if(!found){
-	// 	pci_err(saa716x->pdev, "Frontend attach failed");
-	// 	return -ENODEV;
-	// }	
-
-	switch(count) {
-		case 0:
-			i2c = &saa716x->i2c[0];
-			
-			/* Reset the demodulator */
-			/* This is shared with frontend 1 */
-			saa716x_gpio_set_output(saa716x, 15);
-			saa716x_gpio_write(saa716x, 15, 1);
-			msleep(100);		
-
-			/* PHILIPS TDA10046A */
-			adapter->fe = dvb_attach(tda10046_attach,
-				&tda1004x_08_pctv7010ix_config, &i2c->i2c_adapter);
-
-			if (adapter->fe == NULL) {
-				pci_err(saa716x->pdev, "Frontend attach failed");
-				return -ENODEV;
-			}
-
-			/* Attach TDA8275A tuner */
-			if (dvb_attach(tda827x_attach, adapter->fe, 0x60,
-				&i2c->i2c_adapter, &tda827x_pctv7010ix_config) == NULL) {
-					dvb_frontend_detach(adapter->fe);
-					adapter->fe = NULL;
-
-					pci_err(saa716x->pdev, "No TDA8275A found!");
-					pci_err(saa716x->pdev, "Frontend attach failed");
-					return -ENODEV;
-			}
-
-			break;
-		case 1:
-			i2c = &saa716x->i2c[0];			
-
-			/* PHILIPS TDA10046A */
-			adapter->fe = dvb_attach(tda10046_attach,
-				&tda1004x_88_pctv7010ix_config, &i2c->i2c_adapter);
-
-			if (adapter->fe == NULL) {
-				pci_err(saa716x->pdev, "Frontend attach failed");
-				return -ENODEV;
-			}
-
-			/* Attach TDA8275A tuner */
-			if (dvb_attach(tda827x_attach, adapter->fe, 0x61,
-				&i2c->i2c_adapter, &tda827x_pctv7010ix_config) == NULL) {
-					dvb_frontend_detach(adapter->fe);
-					adapter->fe = NULL;
-
-					pci_err(saa716x->pdev, "No TDA8275A found!");
-					pci_err(saa716x->pdev, "Frontend attach failed");
-					return -ENODEV;
-			}
-
-			break;
-		case 2:
-		case 3:
-			i2c = &saa716x->i2c[1];
-
-			/* Zarlink ZL10313 */
-			adapter->fe = dvb_attach(mt312_attach,
-				&mt312_pctv7010ix_config, &i2c->i2c_adapter);
-
-			if (adapter->fe == NULL) {
-				pci_err(saa716x->pdev, "Frontend attach failed");
-				return -ENODEV;
-			}
-			
-			/* Attach ZL10039 tuner */
-			if (dvb_attach(zl10039_attach, adapter->fe, 0x60,
-				&i2c->i2c_adapter) == NULL) {
-					dvb_frontend_detach(adapter->fe);
-					adapter->fe = NULL;
-
-					pci_err(saa716x->pdev, "No ZL10039 found!");
-					pci_err(saa716x->pdev, "Frontend attach failed");
-					return -ENODEV;
-			}
-
-			break;
-		default:
-			pci_err(saa716x->pdev, "Frontend attach failed");
-			return -ENODEV;
-	}
-	
-
-	/*
-	saa716x_gpio_write(saa716x, 14, 1);
-	msleep(10);
-	saa716x_gpio_write(saa716x, 14, 0);
-	msleep(10);
-	saa716x_gpio_write(saa716x, 14, 1);
-	msleep(10);
-	*/
 
 	pci_dbg(saa716x->pdev, "Done!");
 	return 0;
@@ -353,7 +334,7 @@ static int saa716x_pctv7010ix_frontend_attach(struct saa716x_adapter *adapter,
 static const struct saa716x_config saa716x_pctv7010ix_config = {
 	.model_name		= SAA716x_MODEL_PINNACLE_PCTV7010IX,
 	.dev_type		= SAA716x_DEV_PINNACLE_PCTV7010IX,
-	.adapters		= 2,
+	.adapters		= 1,
 	.frontend_attach	= saa716x_pctv7010ix_frontend_attach,
 	.irq_handler		= saa716x_budget_pci_irq,
 	.i2c_rate		= SAA716x_I2C_RATE_100,
