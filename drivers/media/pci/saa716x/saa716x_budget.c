@@ -140,7 +140,7 @@ static int configure_tda827x_fe(struct saa716x_adapter *adapter,
 	struct saa716x_i2c *i2c = &saa716x->i2c[SAA716x_I2C_BUS_B];
 
 	adapter->fe = dvb_attach(tda10046_attach,
-		&tda1004x_08_pctv7010ix_config, &i2c->i2c_adapter);
+		&demod_conf, &i2c->i2c_adapter);
 
 	if (adapter->fe) {
 		/* Attach TDA8275A tuner */
@@ -278,10 +278,9 @@ static int saa716x_pctv7010ix_frontend_attach(struct saa716x_adapter *adapter,
 			/* This is shared with frontend 1 */
 			saa716x_gpio_set_output(saa716x, 15);
 			saa716x_gpio_write(saa716x, 15, 1);
-			msleep(100);	
+			msleep(100);
 
 			/* PHILIPS TDA10046A */
-
 			if(configure_tda827x_fe(adapter,
 				&tda1004x_08_pctv7010ix_config,
 				&tda827x_pctv7010ix_config) < 0 ){
