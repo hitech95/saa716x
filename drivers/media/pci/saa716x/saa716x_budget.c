@@ -139,8 +139,9 @@ static int configure_tda827x_fe(struct saa716x_adapter *adapter,
 	struct saa716x_dev *saa716x = adapter->saa716x;
 	struct saa716x_i2c *i2c = &saa716x->i2c[SAA716x_I2C_BUS_B];
 
+	/* PHILIPS TDA10046A */
 	adapter->fe = dvb_attach(tda10046_attach,
-		&demod_conf, &i2c->i2c_adapter);
+		demod_conf, &i2c->i2c_adapter);
 
 	if (adapter->fe) {
 		/* Attach TDA8275A tuner */
