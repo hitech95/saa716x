@@ -273,13 +273,20 @@ static int saa716x_pctv7010ix_frontend_attach(struct saa716x_adapter *adapter,
 	// }	
 
 	switch(count) {
-		case 0:			
+		case 0:
+			u32 reset_gpio = 15;	
 			
 			/* Reset the demodulator */
 			/* This is shared with frontend 1 */
-			saa716x_gpio_set_output(saa716x, 15);
-			saa716x_gpio_write(saa716x, 15, 1);
-			msleep(100);
+			saa716x_gpio_set_output(saa716x, reset_gpio);
+			
+			
+			saa716x_gpio_write(saa716x, reset_gpio, 1);
+			msleep(10);
+			saa716x_gpio_write(saa716x, reset_gpio, 0);
+			msleep(10);
+			saa716x_gpio_write(saa716x, reset_gpio, 1);
+			msleep(10);
 
 			/* PHILIPS TDA10046A */
 			if(configure_tda827x_fe(adapter,
