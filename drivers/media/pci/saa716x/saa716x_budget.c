@@ -273,24 +273,22 @@ static int saa716x_pctv7010ix_frontend_attach(struct saa716x_adapter *adapter,
 	// }	
 
 	switch(count) {
-		case 0:
-			u32 reset_gpio = 15;	
-			
+		case 0:	
+
 			/* Reset the demodulator */
 			/* This is shared with frontend 1 */
-			saa716x_gpio_set_output(saa716x, reset_gpio);
-			
-			
-			saa716x_gpio_write(saa716x, reset_gpio, 1);
+			saa716x_gpio_set_output(saa716x, 15);
+
+			saa716x_gpio_write(saa716x, 15, 1);
 			msleep(10);
-			saa716x_gpio_write(saa716x, reset_gpio, 0);
+			saa716x_gpio_write(saa716x, 15, 0);
 			msleep(10);
-			saa716x_gpio_write(saa716x, reset_gpio, 1);
+			saa716x_gpio_write(saa716x, 15, 1);
 			msleep(10);
 
 			/* PHILIPS TDA10046A */
 			if(configure_tda827x_fe(adapter,
-				&tda1004x_08_pctv7010ix_config,
+				&tda1004x_88_pctv7010ix_config,
 				&tda827x_pctv7010ix_config) < 0 ){
 
 				pci_err(saa716x->pdev, "Frontend attach failed");
@@ -299,9 +297,9 @@ static int saa716x_pctv7010ix_frontend_attach(struct saa716x_adapter *adapter,
 
 			break;
 		case 1:
-			i2c = &saa716x->i2c[0];			
+			i2c = &saa716x->i2c[0];
 
-			/* PHILIPS TDA10046A */
+			/* PHILIPS TDA10046A - Old code */
 			adapter->fe = dvb_attach(tda10046_attach,
 				&tda1004x_88_pctv7010ix_config, &i2c->i2c_adapter);
 
