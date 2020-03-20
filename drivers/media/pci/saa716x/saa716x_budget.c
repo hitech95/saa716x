@@ -288,7 +288,7 @@ static int saa716x_pctv7010ix_frontend_attach(struct saa716x_adapter *adapter,
 
 			/* PHILIPS TDA10046A */
 			if(configure_tda827x_fe(adapter,
-				&tda1004x_88_pctv7010ix_config,
+				&tda1004x_08_pctv7010ix_config,
 				&tda827x_pctv7010ix_config) < 0 ){
 
 				pci_err(saa716x->pdev, "Frontend attach failed");
