@@ -132,10 +132,12 @@ static irqreturn_t saa716x_budget_pci_irq(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
-static int configure_tda827x_fe(struct i2c_adapter* i2c,
-				struct tda1004x_config *demod_conf,
-				struct tda827x_config *tuner_conf)
+static int configure_tda827x_fe(
+	struct saa716x_adapter *adapter, struct i2c_adapter* i2c,
+	struct tda1004x_config *demod_conf,	struct tda827x_config *tuner_conf)
 {
+	struct saa716x_dev *saa716x = adapter->saa716x;
+	
 	/* PHILIPS TDA10046A */
 	adapter->fe = dvb_attach(tda10046_attach,
 		demod_conf, i2c);
@@ -199,8 +201,8 @@ static const struct mt312_config mt312_pctv7010ix_config = {
 	.voltage_inverted = 1,
 };
 
-static int saa716x_pctv7010ix_frontend_attach(struct saa716x_adapter *adapter,
-					  int count)
+static int saa716x_pctv7010ix_frontend_attach(
+	struct saa716x_adapter *adapter, int count)
 {
 	struct saa716x_dev *saa716x = adapter->saa716x;
 	struct saa716x_i2c *i2c;
@@ -226,7 +228,7 @@ static int saa716x_pctv7010ix_frontend_attach(struct saa716x_adapter *adapter,
 			msleep(10);
 
 			/* PHILIPS TDA10046A */
-			if(configure_tda827x_fe(&i2c->i2c_adapter,
+			if(configure_tda827x_fe(adapter, &i2c->i2c_adapter,
 				&tda1004x_08_pctv7010ix_config,
 				&tda827x_pctv7010ix_config) < 0 ){
 
@@ -240,7 +242,7 @@ static int saa716x_pctv7010ix_frontend_attach(struct saa716x_adapter *adapter,
 			int pin;
 			int found;
 
-			found = 0;			
+			found = 0;
 			i2c = &saa716x->i2c[SAA716x_I2C_BUS_A];
 
 			for(pin = 0; pin < 28 && !found; pin++) {
@@ -253,7 +255,7 @@ static int saa716x_pctv7010ix_frontend_attach(struct saa716x_adapter *adapter,
 				msleep(100);
 				
 				/* PHILIPS TDA10046A */
-				if(configure_tda827x_fe(&i2c->i2c_adapter,
+				if(configure_tda827x_fe(adapter, &i2c->i2c_adapter,
 					&tda1004x_08_pctv7010ix_config,
 					&tda827x_pctv7010ix_config) < 0 ){
 
