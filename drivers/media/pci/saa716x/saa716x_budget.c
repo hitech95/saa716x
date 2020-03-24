@@ -132,21 +132,18 @@ static irqreturn_t saa716x_budget_pci_irq(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
-static int configure_tda827x_fe(struct saa716x_adapter *adapter,
+static int configure_tda827x_fe(struct i2c_adapter* i2c,
 				struct tda1004x_config *demod_conf,
 				struct tda827x_config *tuner_conf)
 {
-	struct saa716x_dev *saa716x = adapter->saa716x;
-	struct saa716x_i2c *i2c = &saa716x->i2c[SAA716x_I2C_BUS_B];
-
 	/* PHILIPS TDA10046A */
 	adapter->fe = dvb_attach(tda10046_attach,
-		demod_conf, &i2c->i2c_adapter);
+		demod_conf, i2c);
 
 	if (adapter->fe) {
 		/* Attach TDA8275A tuner */
 		if (dvb_attach(tda827x_attach, adapter->fe, demod_conf->tuner_address,
-			&i2c->i2c_adapter, tuner_conf) == NULL) {
+			i2c, tuner_conf) == NULL) {
 				dvb_frontend_detach(adapter->fe);
 				adapter->fe = NULL;
 
@@ -179,22 +176,11 @@ static int tda1004x_pctv7010ix_request_firmware(struct dvb_frontend *fe,
 
 static const struct tda1004x_config tda1004x_08_pctv7010ix_config = {
 	.demod_address	= 0x08,
-	.invert			= 0,
+	.invert			= 1,
 	.invert_oclk	= 0,
-	.xtal_freq		= TDA10046_XTAL_4M,
-	.agc_config		= TDA10046_AGC_DEFAULT,
-	.if_freq		= TDA10046_FREQ_3617,
-	.request_firmware	= tda1004x_pctv7010ix_request_firmware,
-	.tuner_address	= 0x60,
-};
-
-static const struct tda1004x_config tda1004x_88_pctv7010ix_config = {
-	.demod_address	= 0x88,
-	.invert			= 0,
-	.invert_oclk	= 0,
-	.xtal_freq		= TDA10046_XTAL_4M,
-	.agc_config		= TDA10046_AGC_DEFAULT,
-	.if_freq		= TDA10046_FREQ_3617,
+	.xtal_freq		= TDA10046_XTAL_16M,
+	.agc_config		= TDA10046_AGC_TDA827X,
+	.if_freq		= TDA10046_FREQ_045,
 	.request_firmware	= tda1004x_pctv7010ix_request_firmware,
 	.tuner_address	= 0x61,
 };
@@ -219,61 +205,14 @@ static int saa716x_pctv7010ix_frontend_attach(struct saa716x_adapter *adapter,
 	struct saa716x_dev *saa716x = adapter->saa716x;
 	struct saa716x_i2c *i2c;
 
-	//int i, j, k;
-	//int found;
-
 	pci_dbg(saa716x->pdev, "Adapter (%d) SAA716x frontend Init", count);
 	pci_dbg(saa716x->pdev, "Adapter (%d) Device ID=%02x", count,
 		saa716x->pdev->subsystem_device);
-	pci_dbg(saa716x->pdev, "Adapter (%d) Power ON", count);
-	
-	// found = 0;
-	// for(i = 0; i < 2 && !found; i++) {
-	// 	i2c = &saa716x->i2c[i];
-
-	// 	for(j = 0; j < 28 && !found; j++) {
-	// 		saa716x_gpio_set_output(saa716x, j);
-
-	// 		for(k = 0; k < 2 && !found; k++) {			
-				
-	// 			saa716x_gpio_write(saa716x, j, k);
-	// 			msleep(100);
-
-	// 			/* Zarlink ZL10313 */
-	// 			adapter->fe = dvb_attach(mt312_attach,
-	// 				&mt312_pctv7010ix_config, &i2c->i2c_adapter);
-				
-	// 			if (adapter->fe) {
-	// 				pci_warn(saa716x->pdev, "Frontend attach success at address (%d) on bus (%d), with reset gpio (%d) having state (%d)",
-	// 					0x0e, i, j, k);
-	// 				found = 1;
-
-	// 				/* Attach ZL10039 tuner */
-	// 				if (dvb_attach(zl10039_attach, adapter->fe, 0x60,
-	// 					&i2c->i2c_adapter)) {
-	// 						pci_err(saa716x->pdev, "ZL10039 found! on 0x60");		
-	// 				} else {
-	// 					dvb_frontend_detach(adapter->fe);
-	// 					adapter->fe = NULL;
-
-	// 					pci_err(saa716x->pdev, "No ZL10039 found!");
-	// 					return -ENODEV;						
-	// 				}
-	// 			}
-	// 		}
-
-	// 		saa716x_gpio_set_input(saa716x, j);
-	// 		msleep(100);
-	// 	}
-	// }
-
-	// if(!found){
-	// 	pci_err(saa716x->pdev, "Frontend attach failed");
-	// 	return -ENODEV;
-	// }	
+	pci_dbg(saa716x->pdev, "Adapter (%d) Power ON", count);	
 
 	switch(count) {
-		case 0:	
+		case 0:
+			i2c = &saa716x->i2c[SAA716x_I2C_BUS_B];
 
 			/* Reset the demodulator */
 			/* This is shared with frontend 1 */
@@ -287,7 +226,7 @@ static int saa716x_pctv7010ix_frontend_attach(struct saa716x_adapter *adapter,
 			msleep(10);
 
 			/* PHILIPS TDA10046A */
-			if(configure_tda827x_fe(adapter,
+			if(configure_tda827x_fe(&i2c->i2c_adapter,
 				&tda1004x_08_pctv7010ix_config,
 				&tda827x_pctv7010ix_config) < 0 ){
 
@@ -296,27 +235,43 @@ static int saa716x_pctv7010ix_frontend_attach(struct saa716x_adapter *adapter,
 			}
 
 			break;
+
 		case 1:
-			i2c = &saa716x->i2c[0];
+			int pin;
+			int found;
 
-			/* PHILIPS TDA10046A - Old code */
-			adapter->fe = dvb_attach(tda10046_attach,
-				&tda1004x_88_pctv7010ix_config, &i2c->i2c_adapter);
+			found = 0;			
+			i2c = &saa716x->i2c[SAA716x_I2C_BUS_A];
 
-			if (adapter->fe == NULL) {
-				pci_err(saa716x->pdev, "Frontend attach failed");
-				return -ENODEV;
-			}
+			for(pin = 0; pin < 28 && !found; pin++) {
+				if(pin == 15)
+					continue;
+				
+				saa716x_gpio_set_output(saa716x, pin);
 
-			/* Attach TDA8275A tuner */
-			if (dvb_attach(tda827x_attach, adapter->fe, 0x61,
-				&i2c->i2c_adapter, &tda827x_pctv7010ix_config) == NULL) {
-					dvb_frontend_detach(adapter->fe);
-					adapter->fe = NULL;
+				saa716x_gpio_write(saa716x, pin, 1);
+				msleep(100);
+				
+				/* PHILIPS TDA10046A */
+				if(configure_tda827x_fe(&i2c->i2c_adapter,
+					&tda1004x_08_pctv7010ix_config,
+					&tda827x_pctv7010ix_config) < 0 ){
 
-					pci_err(saa716x->pdev, "No TDA8275A found!");
 					pci_err(saa716x->pdev, "Frontend attach failed");
 					return -ENODEV;
+				} else {
+					found = 1;
+					pci_warn(saa716x->pdev, "Frontend attach success at address (%d), with reset gpio (%d)",
+	 					0x08, pin);
+				}
+
+				saa716x_gpio_set_input(saa716x, pin);
+				msleep(100);
+			}
+
+			if(!found){
+				pci_err(saa716x->pdev, "Frontend attach failed");
+				return -ENODEV;
 			}
 
 			break;
@@ -363,7 +318,7 @@ static int saa716x_pctv7010ix_frontend_attach(struct saa716x_adapter *adapter,
 static const struct saa716x_config saa716x_pctv7010ix_config = {
 	.model_name		= SAA716x_MODEL_PINNACLE_PCTV7010IX,
 	.dev_type		= SAA716x_DEV_PINNACLE_PCTV7010IX,
-	.adapters		= 1,
+	.adapters		= 2,
 	.frontend_attach	= saa716x_pctv7010ix_frontend_attach,
 	.irq_handler		= saa716x_budget_pci_irq,
 	.i2c_rate		= SAA716x_I2C_RATE_100,
@@ -378,11 +333,11 @@ static const struct saa716x_config saa716x_pctv7010ix_config = {
 			.ts_vp   = 5, //3
 			.ts_fgpi = 0  //2
 		},
-		{
-			/* adapter 2 */
-			.ts_vp   = 6,
-			.ts_fgpi = 1
-		},
+//		{
+//			/* adapter 2 */
+//			.ts_vp   = 6,
+//			.ts_fgpi = 1
+//		},
 //		{
 //			/* adapter 3 */
 //			.ts_vp   = 3, // 5
