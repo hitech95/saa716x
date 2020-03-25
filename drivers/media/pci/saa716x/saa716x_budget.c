@@ -224,8 +224,8 @@ static const struct tda1004x_config tda1004x_08_pctv7010ix_config = {
 static const struct tda827x_config tda827x_pctv7010ix_config = {
 	.init			= NULL,
 	.sleep			= NULL,
-	.config			= TDA8290_LNA_GP0_HIGH_ON,
-	.switch_addr	= 0x4b
+	//.config			= TDA8290_LNA_GP0_HIGH_ON,
+	//.switch_addr	= 0x4b
 };
 
 static const struct mt312_config mt312_pctv7010ix_config = {
@@ -250,6 +250,33 @@ static int saa716x_pctv7010ix_frontend_attach(struct saa716x_adapter *adapter,
 
 	switch(count) {
 		case 0:
+			i2c = &saa716x->i2c[SAA716x_I2C_BUS_A];
+
+			/* Reset the demodulator */
+			/* This is shared with frontend 1 */
+			saa716x_gpio_set_output(saa716x, 14);
+
+			saa716x_gpio_write(saa716x, 14, 1);
+			msleep(10);
+			saa716x_gpio_write(saa716x, 14, 0);
+			msleep(10);
+			saa716x_gpio_write(saa716x, 14, 1);
+			msleep(10);
+
+			/* PHILIPS TDA10046A */
+			if(configure_tda827x_fe(
+				adapter, &i2c->i2c_adapter,
+				&tda1004x_08_pctv7010ix_config,	
+				&tda827x_pctv7010ix_config) < 0 )
+			{
+
+				pci_err(saa716x->pdev, "Frontend attach failed");
+				return -ENODEV;
+			}
+
+			break;
+
+		case 1:		
 			i2c = &saa716x->i2c[SAA716x_I2C_BUS_B];
 
 			/* Reset the demodulator */
@@ -275,47 +302,6 @@ static int saa716x_pctv7010ix_frontend_attach(struct saa716x_adapter *adapter,
 			}
 
 			break;
-
-		case 1:		
-			i2c = &saa716x->i2c[SAA716x_I2C_BUS_A];
-
-			found = 0;
-			for(pin = 0; pin < 28 && !found; pin++)
-			{
-
-				pci_warn(saa716x->pdev, "Frontend attach probing with reset gpio (%d)", pin);
-
-				if(pin == 15)
-					continue;
-
-				saa716x_gpio_set_output(saa716x, pin);
-
-				saa716x_gpio_write(saa716x, pin, 1);
-				msleep(100);
-
-				/* PHILIPS TDA10046A */
-				if(configure_tda827x_fe(
-					adapter, &i2c->i2c_adapter,
-					&tda1004x_08_pctv7010ix_config,
-					&tda827x_pctv7010ix_config) < 0 )
-				{
-					pci_err(saa716x->pdev, "Frontend attach failed");
-					//return -ENODEV;
-				} else {
-					found = 1;
-					pci_warn(saa716x->pdev, "Frontend attach success at address (%d), with reset gpio (%d)",
-	 					0x08, pin);
-				}
-
-				saa716x_gpio_set_input(saa716x, pin);
-				msleep(100);
-			}
-
-			if(!found)
-			{
-				pci_err(saa716x->pdev, "Frontend attach failed!!!!");
-				return -ENODEV;
-			}
 
 			break;
 		case 2:
