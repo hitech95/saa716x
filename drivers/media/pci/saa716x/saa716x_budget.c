@@ -226,7 +226,6 @@ static const struct tda827x_config tda827x_pctv7010ix_config = {
 	.sleep			= NULL,
 	.config			= TDA8290_LNA_GP0_HIGH_ON,
 	.switch_addr	= 0x4b
-	.agcf			= NULL,
 };
 
 static const struct mt312_config mt312_pctv7010ix_config = {
