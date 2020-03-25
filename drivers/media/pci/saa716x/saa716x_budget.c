@@ -23,6 +23,7 @@
 #include "si2157.h"
 #include "tda1004x.h"
 #include "tda827x.h"
+#include "tda8290.h"
 
 #define DRIVER_NAME	"SAA716x Budget"
 
@@ -132,27 +133,58 @@ static irqreturn_t saa716x_budget_pci_irq(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
+
+static int tda8290_i2c_gate_ctrl( struct dvb_frontend* fe, int enable)
+{
+	struct tda1004x_state *state = fe->demodulator_priv;
+
+	u8 addr = state->config->i2c_gate;
+
+	static u8 tda8290_close[] = { 0x21, 0xc0};
+	static u8 tda8290_open[]  = { 0x21, 0x80};
+	struct i2c_msg tda8290_msg = {.addr = addr,.flags = 0, .len = 2};
+
+	if (enable) {
+		tda8290_msg.buf = tda8290_close;
+	} else {
+		tda8290_msg.buf = tda8290_open;
+	}
+
+	if (i2c_transfer(state->i2c, &tda8290_msg, 1) != 1) {
+		pr_warn("could not access tda8290 I2C gate\n");
+
+		return -EIO;
+	}
+
+	msleep(20);
+	return 0;
+}
+
 static int configure_tda827x_fe(
 	struct saa716x_adapter *adapter, struct i2c_adapter* i2c,
 	struct tda1004x_config *demod_conf,	struct tda827x_config *tuner_conf)
 {
 	struct saa716x_dev *saa716x = adapter->saa716x;
-	
+
 	/* PHILIPS TDA10046A */
-	adapter->fe = dvb_attach(tda10046_attach,
-		demod_conf, i2c);
+	adapter->fe = dvb_attach(tda10046_attach, demod_conf, i2c);
 
-	if (adapter->fe) {
+	if (adapter->fe)
+	{
 		/* Attach TDA8275A tuner */
-		if (dvb_attach(tda827x_attach, adapter->fe, demod_conf->tuner_address,
-			i2c, tuner_conf) == NULL) {
-				dvb_frontend_detach(adapter->fe);
-				adapter->fe = NULL;
+		if (demod_conf->i2c_gate)
+			adapter->fe->ops.i2c_gate_ctrl = tda8290_i2c_gate_ctrl;
 
-				pci_err(saa716x->pdev, "No TDA8275A found at addr %02x!",
-					demod_conf->tuner_address);
-				pci_err(saa716x->pdev, "Frontend attach failed");
-				return -EINVAL;
+		if (dvb_attach(tda827x_attach, adapter->fe, demod_conf->tuner_address,
+			i2c, tuner_conf) == NULL)
+		{
+			dvb_frontend_detach(adapter->fe);
+			adapter->fe = NULL;
+
+			pci_err(saa716x->pdev, "No TDA8275A found at addr %02x!",
+				demod_conf->tuner_address);
+			pci_err(saa716x->pdev, "Frontend attach failed");
+			return -EINVAL;
 		}
 
 		return 0;
@@ -183,15 +215,17 @@ static const struct tda1004x_config tda1004x_08_pctv7010ix_config = {
 	.xtal_freq		= TDA10046_XTAL_16M,
 	.agc_config		= TDA10046_AGC_TDA827X,
 	.if_freq		= TDA10046_FREQ_045,
-	.request_firmware	= tda1004x_pctv7010ix_request_firmware,
+	.gpio_config	= TDA10046_GP11_I,
 	.tuner_address	= 0x61,
+	.i2c_gate		= 0x4b,
+	.request_firmware	= tda1004x_pctv7010ix_request_firmware,
 };
 
 static const struct tda827x_config tda827x_pctv7010ix_config = {
 	.init			= NULL,
 	.sleep			= NULL,
-	.config			= 0,
-	.switch_addr	= 0,
+	.config			= TDA8290_LNA_GP0_HIGH_ON,
+	.switch_addr	= 0x4b
 	.agcf			= NULL,
 };
 
@@ -201,11 +235,14 @@ static const struct mt312_config mt312_pctv7010ix_config = {
 	.voltage_inverted = 1,
 };
 
-static int saa716x_pctv7010ix_frontend_attach(
-	struct saa716x_adapter *adapter, int count)
+static int saa716x_pctv7010ix_frontend_attach(struct saa716x_adapter *adapter,
+	int count)
 {
 	struct saa716x_dev *saa716x = adapter->saa716x;
 	struct saa716x_i2c *i2c;
+	
+	int pin;
+	int found;
 
 	pci_dbg(saa716x->pdev, "Adapter (%d) SAA716x frontend Init", count);
 	pci_dbg(saa716x->pdev, "Adapter (%d) Device ID=%02x", count,
@@ -228,9 +265,11 @@ static int saa716x_pctv7010ix_frontend_attach(
 			msleep(10);
 
 			/* PHILIPS TDA10046A */
-			if(configure_tda827x_fe(adapter, &i2c->i2c_adapter,
-				&tda1004x_08_pctv7010ix_config,
-				&tda827x_pctv7010ix_config) < 0 ){
+			if(configure_tda827x_fe(
+				adapter, &i2c->i2c_adapter,
+				&tda1004x_08_pctv7010ix_config,	
+				&tda827x_pctv7010ix_config) < 0 )
+			{
 
 				pci_err(saa716x->pdev, "Frontend attach failed");
 				return -ENODEV;
@@ -238,29 +277,31 @@ static int saa716x_pctv7010ix_frontend_attach(
 
 			break;
 
-		case 1:
-			int pin;
-			int found;
-
-			found = 0;
+		case 1:		
 			i2c = &saa716x->i2c[SAA716x_I2C_BUS_A];
 
-			for(pin = 0; pin < 28 && !found; pin++) {
+			found = 0;
+			for(pin = 0; pin < 28 && !found; pin++)
+			{
+
+				pci_warn(saa716x->pdev, "Frontend attach probing with reset gpio (%d)", pin);
+
 				if(pin == 15)
 					continue;
-				
+
 				saa716x_gpio_set_output(saa716x, pin);
 
 				saa716x_gpio_write(saa716x, pin, 1);
 				msleep(100);
-				
-				/* PHILIPS TDA10046A */
-				if(configure_tda827x_fe(adapter, &i2c->i2c_adapter,
-					&tda1004x_08_pctv7010ix_config,
-					&tda827x_pctv7010ix_config) < 0 ){
 
+				/* PHILIPS TDA10046A */
+				if(configure_tda827x_fe(
+					adapter, &i2c->i2c_adapter,
+					&tda1004x_08_pctv7010ix_config,
+					&tda827x_pctv7010ix_config) < 0 )
+				{
 					pci_err(saa716x->pdev, "Frontend attach failed");
-					return -ENODEV;
+					//return -ENODEV;
 				} else {
 					found = 1;
 					pci_warn(saa716x->pdev, "Frontend attach success at address (%d), with reset gpio (%d)",
@@ -271,8 +312,9 @@ static int saa716x_pctv7010ix_frontend_attach(
 				msleep(100);
 			}
 
-			if(!found){
-				pci_err(saa716x->pdev, "Frontend attach failed");
+			if(!found)
+			{
+				pci_err(saa716x->pdev, "Frontend attach failed!!!!");
 				return -ENODEV;
 			}
 
@@ -290,20 +332,22 @@ static int saa716x_pctv7010ix_frontend_attach(
 			adapter->fe = dvb_attach(mt312_attach,
 				&mt312_pctv7010ix_config, &i2c->i2c_adapter);
 
-			if (adapter->fe == NULL) {
+			if (adapter->fe == NULL)
+			{
 				pci_err(saa716x->pdev, "Frontend attach failed");
 				return -ENODEV;
 			}
 			
 			/* Attach ZL10039 tuner */
 			if (dvb_attach(zl10039_attach, adapter->fe, 0x60,
-				&i2c->i2c_adapter) == NULL) {
-					dvb_frontend_detach(adapter->fe);
-					adapter->fe = NULL;
+				&i2c->i2c_adapter) == NULL)
+			{
+				dvb_frontend_detach(adapter->fe);
+				adapter->fe = NULL;
 
-					pci_err(saa716x->pdev, "No ZL10039 found!");
-					pci_err(saa716x->pdev, "Frontend attach failed");
-					return -ENODEV;
+				pci_err(saa716x->pdev, "No ZL10039 found!");
+				pci_err(saa716x->pdev, "Frontend attach failed");
+				return -ENODEV;
 			}
 
 			break;
