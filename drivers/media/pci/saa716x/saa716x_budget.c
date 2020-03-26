@@ -216,8 +216,8 @@ static const struct tda1004x_config tda1004x_08_pctv7010ix_config = {
 	.agc_config		= TDA10046_AGC_TDA827X,
 	.if_freq		= TDA10046_FREQ_045,
 	.gpio_config	= TDA10046_GP11_I,
-	.tuner_address	= 0x61,
-	.i2c_gate		= 0x4b,
+	.tuner_address	= 0x60,
+	//.i2c_gate		= 0x4b,
 	.request_firmware	= tda1004x_pctv7010ix_request_firmware,
 };
 
@@ -252,8 +252,7 @@ static int saa716x_pctv7010ix_frontend_attach(struct saa716x_adapter *adapter,
 		case 0:
 			i2c = &saa716x->i2c[SAA716x_I2C_BUS_A];
 
-			/* Reset the demodulator */
-			/* This is shared with frontend 1 */
+			/* Reset the demodulator */			
 			saa716x_gpio_set_output(saa716x, 14);
 
 			saa716x_gpio_write(saa716x, 14, 1);
@@ -280,7 +279,6 @@ static int saa716x_pctv7010ix_frontend_attach(struct saa716x_adapter *adapter,
 			i2c = &saa716x->i2c[SAA716x_I2C_BUS_B];
 
 			/* Reset the demodulator */
-			/* This is shared with frontend 1 */
 			saa716x_gpio_set_output(saa716x, 15);
 
 			saa716x_gpio_write(saa716x, 15, 1);
@@ -296,7 +294,6 @@ static int saa716x_pctv7010ix_frontend_attach(struct saa716x_adapter *adapter,
 				&tda1004x_08_pctv7010ix_config,	
 				&tda827x_pctv7010ix_config) < 0 )
 			{
-
 				pci_err(saa716x->pdev, "Frontend attach failed");
 				return -ENODEV;
 			}
@@ -305,10 +302,9 @@ static int saa716x_pctv7010ix_frontend_attach(struct saa716x_adapter *adapter,
 
 			break;
 		case 2:
-			i2c = &saa716x->i2c[0];
+			i2c = &saa716x->i2c[SAA716x_I2C_BUS_B];
 
 			/* Reset the demodulator */
-			/* This is shared with frontend 3 */
 			saa716x_gpio_set_output(saa716x, 20);
 			saa716x_gpio_write(saa716x, 20, 1);
 			msleep(100);
