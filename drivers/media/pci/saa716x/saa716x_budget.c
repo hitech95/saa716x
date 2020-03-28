@@ -69,6 +69,20 @@ static int saa716x_budget_pci_probe(struct pci_dev *pdev,
 
 	saa716x_gpio_init(saa716x);
 
+	/* enable decoders on 7162 */
+	if (pdev->device == SAA7162) {
+		saa716x_gpio_set_output(saa716x, 24);
+		saa716x_gpio_set_output(saa716x, 25);
+
+		saa716x_gpio_write(saa716x, 24, 0);
+		saa716x_gpio_write(saa716x, 25, 0);
+
+		msleep(10);
+
+		saa716x_gpio_write(saa716x, 24, 1);
+		saa716x_gpio_write(saa716x, 25, 1);
+	}
+
 	err = saa716x_dvb_init(saa716x);
 	if (err) {
 		pci_err(saa716x->pdev, "DVB initialization failed");
@@ -133,6 +147,29 @@ static irqreturn_t saa716x_budget_pci_irq(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
+static int saa7136_i2c_gate_ctrl( struct dvb_frontend* fe, int enable)
+{
+	struct tda1004x_state *state = fe->demodulator_priv;
+
+	static u8 saa7136_close[] = { 0x05, 0x23, 0x01 };
+	static u8 saa7136_open[]  = { 0x05, 0x23, 0x00 };
+	struct i2c_msg saa7136_msg = {.addr = 0x21,.flags = 0, .len = 3};
+
+	if (enable) {
+		saa7136_msg.buf = saa7136_close;
+	} else {
+		saa7136_msg.buf = saa7136_open;
+	}
+
+	if (i2c_transfer(state->i2c, &saa7136_msg, 1) != 1) {
+		pr_warn("Could not access SAA7136 I2C gate\n");
+
+		return -EIO;
+	}
+
+	msleep(20);
+	return 0;
+}
 
 static int tda8290_i2c_gate_ctrl( struct dvb_frontend* fe, int enable)
 {
@@ -151,7 +188,7 @@ static int tda8290_i2c_gate_ctrl( struct dvb_frontend* fe, int enable)
 	}
 
 	if (i2c_transfer(state->i2c, &tda8290_msg, 1) != 1) {
-		pr_warn("could not access tda8290 I2C gate\n");
+		pr_warn("Could not access tda8290 I2C gate\n");
 
 		return -EIO;
 	}
@@ -215,16 +252,15 @@ static const struct tda1004x_config tda1004x_08_pctv7010ix_config = {
 	.xtal_freq		= TDA10046_XTAL_16M,
 	.agc_config		= TDA10046_AGC_TDA827X,
 	.if_freq		= TDA10046_FREQ_045,
-	.gpio_config	= TDA10046_GP11_I,
+	//.gpio_config	= TDA10046_GP11_I,
 	.tuner_address	= 0x60,
-	//.i2c_gate		= 0x4b,
 	.request_firmware	= tda1004x_pctv7010ix_request_firmware,
 };
 
 static const struct tda827x_config tda827x_pctv7010ix_config = {
 	.init			= NULL,
 	.sleep			= NULL,
-	//.config			= TDA8290_LNA_GP0_HIGH_ON,
+	//.config		= TDA8290_LNA_GP0_HIGH_ON,
 	//.switch_addr	= 0x4b
 };
 
@@ -239,9 +275,6 @@ static int saa716x_pctv7010ix_frontend_attach(struct saa716x_adapter *adapter,
 {
 	struct saa716x_dev *saa716x = adapter->saa716x;
 	struct saa716x_i2c *i2c;
-	
-	int pin;
-	int found;
 
 	pci_dbg(saa716x->pdev, "Adapter (%d) SAA716x frontend Init", count);
 	pci_dbg(saa716x->pdev, "Adapter (%d) Device ID=%02x", count,
@@ -273,8 +306,8 @@ static int saa716x_pctv7010ix_frontend_attach(struct saa716x_adapter *adapter,
 				return -ENODEV;
 			}
 
+			adapter->fe->ops.i2c_gate_ctrl = saa7136_i2c_gate_ctrl;
 			break;
-
 		case 1:		
 			i2c = &saa716x->i2c[SAA716x_I2C_BUS_B];
 
@@ -298,10 +331,9 @@ static int saa716x_pctv7010ix_frontend_attach(struct saa716x_adapter *adapter,
 				return -ENODEV;
 			}
 
+			adapter->fe->ops.i2c_gate_ctrl = saa7136_i2c_gate_ctrl;
 			break;
-
-			break;
-		case 2:
+		case 3:
 			i2c = &saa716x->i2c[SAA716x_I2C_BUS_B];
 
 			/* Reset the demodulator */
@@ -332,7 +364,7 @@ static int saa716x_pctv7010ix_frontend_attach(struct saa716x_adapter *adapter,
 			}
 
 			break;
-		case 3:
+		case 2:
 		default:
 			pci_err(saa716x->pdev, "Frontend attach failed");
 			return -ENODEV;
