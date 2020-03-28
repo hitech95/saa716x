@@ -147,7 +147,7 @@ static irqreturn_t saa716x_budget_pci_irq(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
-static int saa7136_i2c_gate_ctrl( struct dvb_frontend* fe, int enable)
+static int saa7136_i2c_gate_ctrl(struct dvb_frontend* fe, int enable)
 {
 	struct tda1004x_state *state = fe->demodulator_priv;
 
@@ -171,7 +171,7 @@ static int saa7136_i2c_gate_ctrl( struct dvb_frontend* fe, int enable)
 	return 0;
 }
 
-static int tda8290_i2c_gate_ctrl( struct dvb_frontend* fe, int enable)
+static int tda8290_i2c_gate_ctrl(struct dvb_frontend* fe, int enable)
 {
 	struct tda1004x_state *state = fe->demodulator_priv;
 
@@ -252,7 +252,6 @@ static const struct tda1004x_config tda1004x_08_pctv7010ix_config = {
 	.xtal_freq		= TDA10046_XTAL_16M,
 	.agc_config		= TDA10046_AGC_TDA827X,
 	.if_freq		= TDA10046_FREQ_045,
-	//.gpio_config	= TDA10046_GP11_I,
 	.tuner_address	= 0x60,
 	.request_firmware	= tda1004x_pctv7010ix_request_firmware,
 };
@@ -260,8 +259,6 @@ static const struct tda1004x_config tda1004x_08_pctv7010ix_config = {
 static const struct tda827x_config tda827x_pctv7010ix_config = {
 	.init			= NULL,
 	.sleep			= NULL,
-	//.config		= TDA8290_LNA_GP0_HIGH_ON,
-	//.switch_addr	= 0x4b
 };
 
 static const struct mt312_config mt312_pctv7010ix_config = {
@@ -276,6 +273,14 @@ static int saa716x_pctv7010ix_frontend_attach(struct saa716x_adapter *adapter,
 	struct saa716x_dev *saa716x = adapter->saa716x;
 	struct saa716x_i2c *i2c;
 
+	u8 i2c_buf[3] = { 0x05, 0x23, 0x01 }; /* activate the silent I2C bus */
+	struct i2c_msg msg = {
+		.addr  = 0x42 >> 1,
+		.flags = 0,
+		.buf   = i2c_buf,
+		.len   = sizeof(i2c_buf)
+	};
+
 	pci_dbg(saa716x->pdev, "Adapter (%d) SAA716x frontend Init", count);
 	pci_dbg(saa716x->pdev, "Adapter (%d) Device ID=%02x", count,
 		saa716x->pdev->subsystem_device);
@@ -284,6 +289,9 @@ static int saa716x_pctv7010ix_frontend_attach(struct saa716x_adapter *adapter,
 	switch(count) {
 		case 0:
 			i2c = &saa716x->i2c[SAA716x_I2C_BUS_A];
+
+			/* Lets force open the i2c gate */
+			i2c_transfer(&i2c->i2c_adapter, &msg, 1);
 
 			/* Reset the demodulator */			
 			saa716x_gpio_set_output(saa716x, 14);
@@ -301,14 +309,13 @@ static int saa716x_pctv7010ix_frontend_attach(struct saa716x_adapter *adapter,
 				&tda1004x_08_pctv7010ix_config,	
 				&tda827x_pctv7010ix_config) < 0 )
 			{
-
 				pci_err(saa716x->pdev, "Frontend attach failed");
 				return -ENODEV;
 			}
 
-			adapter->fe->ops.i2c_gate_ctrl = saa7136_i2c_gate_ctrl;
+			adapter->fe->ops.i2c_gate_ctrl = NULL;
 			break;
-		case 1:		
+		case 1:	
 			i2c = &saa716x->i2c[SAA716x_I2C_BUS_B];
 
 			/* Reset the demodulator */
@@ -331,7 +338,10 @@ static int saa716x_pctv7010ix_frontend_attach(struct saa716x_adapter *adapter,
 				return -ENODEV;
 			}
 
-			adapter->fe->ops.i2c_gate_ctrl = saa7136_i2c_gate_ctrl;
+			adapter->fe->ops.i2c_gate_ctrl = NULL;
+
+//			if(adapter->fe != NULL)
+//				adapter->fe->ops.i2c_gate_ctrl = saa7136_i2c_gate_ctrl;
 			break;
 		case 3:
 			i2c = &saa716x->i2c[SAA716x_I2C_BUS_B];
@@ -364,7 +374,61 @@ static int saa716x_pctv7010ix_frontend_attach(struct saa716x_adapter *adapter,
 			}
 
 			break;
-		case 2:
+		case 2: 
+			{
+				int pin;
+				int found;
+
+				i2c = &saa716x->i2c[SAA716x_I2C_BUS_A];
+
+				found = 0;
+
+				for(pin = 0; pin < 28 && !found; j++)
+				{
+
+					if(pin == 14 || pin == 15 || pin == 20 || pin == 24 || pin == 25)
+					{
+						continue;
+					}
+
+					saa716x_gpio_set_output(saa716x, pin);									
+						
+					saa716x_gpio_write(saa716x, pin, 1);
+					msleep(100);
+
+					/* Zarlink ZL10313 */
+					adapter->fe = dvb_attach(mt312_attach,
+						&mt312_pctv7010ix_config, &i2c->i2c_adapter);
+
+					if (adapter->fe) {
+						pci_warn(saa716x->pdev, "Frontend attach with reset gpio", pin);
+						found = 1;
+
+						/* Attach ZL10039 tuner */
+						if (dvb_attach(zl10039_attach,
+							adapter->fe, 0x60, &i2c->i2c_adapter)) {
+								pci_err(saa716x->pdev, "ZL10039 found! on 0x60");
+						} else {
+							dvb_frontend_detach(adapter->fe);
+							adapter->fe = NULL;
+
+							pci_err(saa716x->pdev, "No ZL10039 found!");
+							return -ENODEV;						
+						}
+					}				
+
+					saa716x_gpio_set_input(saa716x, pin);
+					msleep(100);
+				}
+
+				if(!found)
+				{
+					pci_err(saa716x->pdev, "Frontend attach failed");
+					return -ENODEV;
+				}
+
+				break;
+			}
 		default:
 			pci_err(saa716x->pdev, "Frontend attach failed");
 			return -ENODEV;
@@ -377,7 +441,7 @@ static int saa716x_pctv7010ix_frontend_attach(struct saa716x_adapter *adapter,
 static const struct saa716x_config saa716x_pctv7010ix_config = {
 	.model_name		= SAA716x_MODEL_PINNACLE_PCTV7010IX,
 	.dev_type		= SAA716x_DEV_PINNACLE_PCTV7010IX,
-	.adapters		= 2,
+	.adapters		= 4,
 	.frontend_attach	= saa716x_pctv7010ix_frontend_attach,
 	.irq_handler		= saa716x_budget_pci_irq,
 	.i2c_rate		= SAA716x_I2C_RATE_100,
